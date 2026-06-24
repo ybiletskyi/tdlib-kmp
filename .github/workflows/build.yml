@@ -1,0 +1,47 @@
+name: Build
+
+# Orchestrator: fans out to per-platform native builds, then fans in to a single
+# job that assembles the KMP library from all produced artifacts.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --- Fan-out: native builds (run in parallel) ------------------------------
+  android:
+    uses: ./.github/workflows/build-android.yml
+
+  # Future platforms plug in here as more reusable workflows:
+  # apple:
+  #   uses: ./.github/workflows/build-apple.yml
+  # jvm:
+  #   uses: ./.github/workflows/build-jvm.yml
+
+  # --- Fan-in: assemble the KMP library --------------------------------------
+  assemble-kmp:
+    name: Assemble KMP library
+    needs: [android]
+    # TODO: switch to macos-latest once Apple (iOS/tvOS/macOS) targets are added —
+    # Kotlin/Native Apple targets can only be built/published from macOS.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: build/native
+          pattern: native-*
+
+      - name: Inspect native artifacts (placeholder)
+        run: find build/native -type f | sort
+      # TODO: ./gradlew assemble  (cinterop + KMP packaging/publishing)

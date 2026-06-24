@@ -1,0 +1,59 @@
+name: Build Android
+
+# Reusable component: builds libtdjson.so for all Android ABIs and uploads them
+# as the `native-android` artifact. Called by build.yml; also runnable on its own
+# for debugging via the Actions tab.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  # Pinned NDK so builds are reproducible and the OpenSSL cache key is stable.
+  NDK_VERSION: r27c
+
+jobs:
+  build:
+    name: libtdjson (Android)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          local-cache: true
+
+      - name: Export NDK path
+        run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
+
+      - name: Install host build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build gperf
+
+      - name: Resolve OpenSSL submodule SHA
+        run: echo "OPENSSL_SHA=$(git -C external/openssl rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Cache OpenSSL build
+        id: openssl-cache
+        uses: actions/cache@v4
+        with:
+          path: build/android/openssl
+          key: openssl-android-${{ env.NDK_VERSION }}-${{ env.OPENSSL_SHA }}
+
+      - name: Build OpenSSL (Android)
+        if: steps.openssl-cache.outputs.cache-hit != 'true'
+        run: scripts/android/build-openssl.sh
+
+      - name: Build TDLib JSON (Android)
+        run: scripts/android/build-tdlib.sh
+
+      - name: Upload native libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-android
+          path: build/android/tdlib/libs/**
+          if-no-files-found: error
