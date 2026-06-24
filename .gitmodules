@@ -1,3 +1,6 @@
 [submodule "external/td"]
 	path = external/td
 	url = https://github.com/tdlib/td
+[submodule "external/openssl"]
+	path = external/openssl
+	url = https://github.com/openssl/openssl
